@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="app.ico" width="128" height="128" alt="Aura Logo">
-</p>
-
 <h1 align="center">✦ AURA VIDEO DOWNLOADER ✦</h1>
 
 <p align="center">
