@@ -1530,7 +1530,6 @@ PLATFORM_CONFIGS = {
         "has_audio_lang": True, "needs_nodejs": True,
         "use_ytdlp_config": True, "normalize_channel_url": True,
         "no_cookies_args": ["--extractor-args", "youtube:player_client=android,web"],
-        "cookies_args": ["--extractor-args", "youtube:player_client=web_creator,mweb,web"],
         "channel_label":  {"ru": "📺 Канал",              "en": "📺 Channel"},
         "channel_desc":   {"ru": "Все видео с канала",     "en": "All videos from channel"},
         "url_label_channel": {"ru": "🔗 URL канала:",      "en": "🔗 Channel URL:"},
