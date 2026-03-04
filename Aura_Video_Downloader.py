@@ -217,9 +217,18 @@ SPEED_REGEX = re.compile(r'\[download\]\s+[\d.]+%.*?at\s+~?\s*([\d.]+\S+/s)\s+ET
 SPEED_ONLY_REGEX = re.compile(r'\[download\]\s+[\d.]+%.*?at\s+~?\s*([\d.]+\S+/s)')
 PERCENT_REGEX = re.compile(r'\[download\]\s+([\d.]+)%')
 
+# aria2c external downloader progress:
+#   [#72ee7e 47MiB/3.9GiB(1%) CN:16 DL:7.8MiB ETA:8m27s]
+#   [#5f5b78 512KiB/544KiB(94%) CN:1 DL:66KiB]
+ARIA2C_PROGRESS_REGEX = re.compile(r'\[#\w+\s+\S+/\S+\((\d+)%\)')
+ARIA2C_SPEED_REGEX = re.compile(r'DL:([\d.]+\s*[A-Za-z/]+)')
+ARIA2C_ETA_REGEX = re.compile(r'ETA:(\S+?)\]')
+
 DOWNLOAD_COMPLETE_PATTERNS = ['has already been downloaded']
 DOWNLOAD_COMPLETE_100_REGEX = re.compile(r'\[download\]\s+100(?:\.0)?%')
 ARCHIVE_SKIP_PATTERNS = ['has already been recorded in the archive']
+# aria2c prints "Download complete:" when a file finishes
+ARIA2C_COMPLETE_PATTERN = 'Download complete:'
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  ЛОКАЛИЗАЦИЯ / LOCALIZATION
@@ -448,6 +457,7 @@ TRANSLATIONS = {
         "sb_enabled_log": "🛡️ SponsorBlock: {action} [{cats}]",
         "sb_force_keyframes": "🔑 Точная обрезка",
         "sb_force_keyframes_hint": "Перекодирует на границах — без артефактов, но медленнее",
+        "sb_reencode_warn": "⚠️ SponsorBlock + Точная обрезка\n\nЭтот режим перекодирует видео целиком.\nСкачивание займёт значительно больше времени.\n\nПродолжить?",
         
         # aria2c / Многопоточная загрузка
         "aria2c_label": "🚀 Многопоточная загрузка (aria2c)",
@@ -494,6 +504,11 @@ TRANSLATIONS = {
         "settings_reset": "✅ Все настройки удалены. Программа закрывается...",
         "reset_log_header": "🗑️ === ПОЛНЫЙ СБРОС НАСТРОЕК ===",
         "reset_cleanup_launched": "  ✅ Настройки успешно удалены",
+        "settings_migrated": "  🔄 Настройки обновлены до новой версии:",
+        "settings_key_added": "     + {key} = {value}",
+        "settings_key_removed": "     − {key} (больше не используется)",
+        "settings_up_to_date": "  ✅ Файл настроек актуален ({count} параметров)",
+        "settings_file_saved": "     💾 Файл сохранён: {path}",
         "log_mode": "  Режим: {mode}",
         "log_title_lang": "  🏷️ Язык заголовков: {lang}",
         "log_ytdlp_titles_note": "  ⚠️ Перевод заголовков сейчас сломан в yt-dlp (баг #13363)",
@@ -968,6 +983,7 @@ TRANSLATIONS = {
         "sb_enabled_log": "🛡️ SponsorBlock: {action} [{cats}]",
         "sb_force_keyframes": "🔑 Precise cuts",
         "sb_force_keyframes_hint": "Re-encodes at boundaries — no artifacts, but slower",
+        "sb_reencode_warn": "⚠️ SponsorBlock + Precise cuts\n\nThis mode will re-encode the entire video.\nDownloading will take significantly longer.\n\nContinue?",
         
         # aria2c / Multi-threaded download
         "aria2c_label": "🚀 Multi-threaded download (aria2c)",
@@ -1014,6 +1030,11 @@ TRANSLATIONS = {
         "settings_reset": "✅ All settings deleted. Closing...",
         "reset_log_header": "🗑️ === FULL SETTINGS RESET ===",
         "reset_cleanup_launched": "  ✅ Settings deleted successfully",
+        "settings_migrated": "  🔄 Settings updated to new version:",
+        "settings_key_added": "     + {key} = {value}",
+        "settings_key_removed": "     − {key} (no longer used)",
+        "settings_up_to_date": "  ✅ Settings file is up to date ({count} keys)",
+        "settings_file_saved": "     💾 File saved: {path}",
         "log_mode": "  Mode: {mode}",
         "log_title_lang": "  🏷️ Title language: {lang}",
         "log_ytdlp_titles_note": "  ⚠️ Note: translated titles are currently broken in yt-dlp (bug #13363)",
@@ -1433,7 +1454,13 @@ SUBTITLE_LANGUAGES = [
 ]
 # ══════════════════════════════════════════════════════════════════════════════
 class SettingsManager:
-    """Менеджер сохранения и загрузки настроек (per-platform)."""
+    """Менеджер сохранения и загрузки настроек (per-platform).
+    
+    Smart migration: when the app adds new settings (or removes old ones),
+    the config file on disk is automatically updated on next load.
+    User's existing values are NEVER overwritten — only missing keys
+    get their defaults, and stale keys are cleaned up.
+    """
     
     DEFAULT_SETTINGS = {
         "mode": "video",
@@ -1470,6 +1497,7 @@ class SettingsManager:
         # Per-platform config: config_youtube.json, config_vk.json, etc.
         # Always resolve dynamically — settings dir may change after config location dialog
         self.platform = platform
+        self.last_migration = None  # Set by load() if migration occurred
         self._resolve_path()
     
     def _resolve_path(self):
@@ -1478,17 +1506,53 @@ class SettingsManager:
         self.config_path = settings_dir / f"config_{self.platform}.json"
     
     def load(self):
-        """Загрузить настройки из файла."""
+        """Load settings from file with automatic migration.
+        
+        - Keys present in DEFAULT but missing from file → added with default value
+        - Keys present in file but missing from DEFAULT → removed (stale)
+        - If any changes → file is re-saved immediately
+        - Migration report stored in self.last_migration
+        """
+        self.last_migration = None
+        saved = {}
+        is_new_file = True
+        
         try:
             if self.config_path.exists():
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     saved = json.load(f)
-                    settings = self.DEFAULT_SETTINGS.copy()
-                    settings.update(saved)
-                    return settings
+                is_new_file = False
         except Exception:
-            pass
-        return self.DEFAULT_SETTINGS.copy()
+            saved = {}
+        
+        if is_new_file:
+            # First run for this platform — no migration needed
+            return self.DEFAULT_SETTINGS.copy()
+        
+        # Detect differences
+        default_keys = set(self.DEFAULT_SETTINGS.keys())
+        saved_keys = set(saved.keys())
+        
+        added_keys = default_keys - saved_keys    # New settings not in file
+        removed_keys = saved_keys - default_keys  # Stale settings no longer used
+        
+        # Build merged result: defaults + saved values for known keys
+        settings = self.DEFAULT_SETTINGS.copy()
+        for key in default_keys:
+            if key in saved:
+                settings[key] = saved[key]
+        
+        # If something changed — save the clean, complete file
+        if added_keys or removed_keys:
+            self.last_migration = {
+                "added": {k: self.DEFAULT_SETTINGS[k] for k in sorted(added_keys)},
+                "removed": sorted(removed_keys),
+            }
+            # Re-save so the file on disk is always complete and clean
+            if not is_debug_mode():
+                self.save(settings)
+        
+        return settings
     
     def save(self, settings):
         """Сохранить настройки в файл (atomic write — crash-safe)."""
@@ -2549,6 +2613,9 @@ class AuraDownloader(QMainWindow):
         # State
         self.stop_event = threading.Event()
         self.worker = None
+        self._download_generation = 0      # Incremented each start — prevents stale callbacks
+        self._restart_process = None        # Active subprocess in restart mode (for cleanup)
+        self._restart_thread = None         # Active restart thread reference
         self.total_videos = 0
         self.downloaded_videos = 0
         self._last_destination = ""
@@ -3382,6 +3449,20 @@ class AuraDownloader(QMainWindow):
     def _load_settings_impl(self):
         settings = self.settings_manager.load()
         
+        # Log migration report (new/removed settings detected)
+        migration = self.settings_manager.last_migration
+        if migration:
+            self.log(self.t.get("settings_migrated", "  🔄 Settings migrated:"))
+            for key, value in migration["added"].items():
+                display_val = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
+                self.log(self.t.get("settings_key_added", "     + {key} = {value}").format(
+                    key=key, value=display_val))
+            for key in migration["removed"]:
+                self.log(self.t.get("settings_key_removed", "     − {key}").format(key=key))
+            self.log(self.t.get("settings_file_saved", "     💾 {path}").format(
+                path=self.settings_manager.config_path))
+            self.log("")
+        
         valid_modes = [self.MODE_CHANNEL, self.MODE_PLAYLIST, self.MODE_VIDEO, self.MODE_AUDIO]
         if settings.get("mode") in valid_modes:
             self._set_radio_group(self.mode_buttons, "mode_value", settings["mode"])
@@ -3570,6 +3651,21 @@ class AuraDownloader(QMainWindow):
         for w in getattr(self, '_parallel_workers', []):
             w.stop()
             w.wait(3000)
+            if w.isRunning():
+                try:
+                    w.terminate()
+                except Exception:
+                    pass
+        # Kill restart mode subprocess (prevents orphan yt-dlp processes)
+        if self._restart_process:
+            try:
+                self._restart_process.terminate()
+                self._restart_process.wait(timeout=PROCESS_TERMINATE_TIMEOUT)
+            except Exception:
+                try:
+                    self._restart_process.kill()
+                except Exception:
+                    pass
         event.accept()
     
     # ══════════════════════════════════════════════════════════════════════════
@@ -3721,6 +3817,10 @@ class AuraDownloader(QMainWindow):
         if self.total_videos > 0:
             text = self.t["progress_format"].format(downloaded=self.downloaded_videos, total=self.total_videos)
             self.progress_label.setText(text)
+            # Update progress bar for playlists when video count changes
+            if self.total_videos > 1:
+                overall = int(self.downloaded_videos * 100 / self.total_videos)
+                self.progress_bar.setValue(overall)
         else:
             self.progress_label.setText(self.t["progress_scanning"])
     
@@ -3739,7 +3839,7 @@ class AuraDownloader(QMainWindow):
             pass  # Never crash on progress parsing
     
     def _handle_progress_line_impl(self, line):
-        # Speed & ETA
+        # ── Speed & ETA (native yt-dlp) ──
         speed_match = SPEED_REGEX.search(line)
         if speed_match:
             self.current_speed = speed_match.group(1)
@@ -3751,16 +3851,43 @@ class AuraDownloader(QMainWindow):
                 self.current_speed = speed_only.group(1)
                 self.current_eta = ""
                 self._update_speed_display()
+            else:
+                # ── Speed & ETA (aria2c) ──
+                aria_speed = ARIA2C_SPEED_REGEX.search(line)
+                if aria_speed:
+                    raw = aria_speed.group(1).strip()
+                    # aria2c omits "/s" — add it for display consistency
+                    self.current_speed = raw if '/s' in raw else f"{raw}/s"
+                    aria_eta = ARIA2C_ETA_REGEX.search(line)
+                    self.current_eta = aria_eta.group(1) if aria_eta else ""
+                    self._update_speed_display()
         
-        # Percent bar
+        # ── Percent bar (native yt-dlp) ──
+        current_file_pct = None
         pct_match = PERCENT_REGEX.search(line)
         if pct_match:
             try:
-                self.progress_bar.setValue(int(float(pct_match.group(1))))
+                current_file_pct = float(pct_match.group(1))
             except (ValueError, TypeError):
                 pass
+        else:
+            # ── Percent bar (aria2c) ──
+            aria_pct = ARIA2C_PROGRESS_REGEX.search(line)
+            if aria_pct:
+                try:
+                    current_file_pct = float(aria_pct.group(1))
+                except (ValueError, TypeError):
+                    pass
         
-        # Video counter ("Downloading item X of Y") — means new video starting
+        if current_file_pct is not None:
+            if self.total_videos > 1:
+                # Playlist: weighted overall progress
+                overall = (self.downloaded_videos * 100 + current_file_pct) / self.total_videos
+                self.progress_bar.setValue(int(overall))
+            else:
+                self.progress_bar.setValue(int(current_file_pct))
+        
+        # ── Video counter ("Downloading item X of Y") ──
         match = PROGRESS_REGEX.search(line)
         if match:
             # Flush previous video's pending history before starting new one
@@ -3769,16 +3896,21 @@ class AuraDownloader(QMainWindow):
             self.downloaded_videos = min(int(match.group(1)) - 1, self.total_videos)
             self._update_progress_display()
         
-        # Track destinations
+        # ── Track destinations ──
         if '[download] Destination:' in line:
             dest = line.split('Destination:', 1)[-1].strip()
             self._last_destination = Path(dest).stem if dest else ""
+            # Reset bar for new file part (e.g. video→audio of same video)
+            if self.total_videos <= 1:
+                self.progress_bar.setValue(0)
         elif '[Merger] Merging formats into' in line:
             # Merger = final product. Update name to merged file, then flush.
-            try:
-                self._last_destination = Path(line.split('"')[1]).stem
-            except (IndexError, TypeError):
-                pass
+            m = re.search(r'Merging formats into ["\'](.+?)["\']', line)
+            if m:
+                try:
+                    self._last_destination = Path(m.group(1)).stem
+                except (ValueError, TypeError):
+                    pass
             self._pending_history = True
             self._flush_pending_history()
             return  # Already flushed, skip duplicate check below
@@ -3810,7 +3942,8 @@ class AuraDownloader(QMainWindow):
     
     def _is_download_complete_line(self, line):
         return (DOWNLOAD_COMPLETE_100_REGEX.search(line) is not None or 
-                any(p in line for p in DOWNLOAD_COMPLETE_PATTERNS))
+                any(p in line for p in DOWNLOAD_COMPLETE_PATTERNS) or
+                ARIA2C_COMPLETE_PATTERN in line)
     
     def _is_archive_skip_line(self, line):
         return any(p in line for p in ARCHIVE_SKIP_PATTERNS)
@@ -3822,7 +3955,7 @@ class AuraDownloader(QMainWindow):
             if not state:
                 return
             
-            # Per-worker speed/ETA
+            # Per-worker speed/ETA (native yt-dlp)
             speed_match = SPEED_REGEX.search(line)
             if speed_match:
                 state['speed'] = speed_match.group(1)
@@ -3832,14 +3965,30 @@ class AuraDownloader(QMainWindow):
                 if speed_only:
                     state['speed'] = speed_only.group(1)
                     state['eta'] = ''
+                else:
+                    # aria2c speed/ETA
+                    aria_speed = ARIA2C_SPEED_REGEX.search(line)
+                    if aria_speed:
+                        raw = aria_speed.group(1).strip()
+                        state['speed'] = raw if '/s' in raw else f"{raw}/s"
+                        aria_eta = ARIA2C_ETA_REGEX.search(line)
+                        state['eta'] = aria_eta.group(1) if aria_eta else ''
             
-            # Per-worker percent (current file download progress)
+            # Per-worker percent (native yt-dlp)
             pct_match = PERCENT_REGEX.search(line)
             if pct_match:
                 try:
                     state['pct'] = float(pct_match.group(1))
                 except (ValueError, TypeError):
                     pass
+            else:
+                # aria2c percent
+                aria_pct = ARIA2C_PROGRESS_REGEX.search(line)
+                if aria_pct:
+                    try:
+                        state['pct'] = float(aria_pct.group(1))
+                    except (ValueError, TypeError):
+                        pass
             
             # Per-worker video counter — new video starting, flush previous
             match = PROGRESS_REGEX.search(line)
@@ -3852,11 +4001,14 @@ class AuraDownloader(QMainWindow):
             if '[download] Destination:' in line:
                 dest = line.split('Destination:', 1)[-1].strip()
                 state['last_dest'] = Path(dest).stem if dest else ''
+                state['pct'] = 0  # Reset for new file part
             elif '[Merger] Merging formats into' in line:
-                try:
-                    state['last_dest'] = Path(line.split('"')[1]).stem
-                except (IndexError, TypeError):
-                    pass
+                m = re.search(r'Merging formats into ["\'](.+?)["\']', line)
+                if m:
+                    try:
+                        state['last_dest'] = Path(m.group(1)).stem
+                    except (ValueError, TypeError):
+                        pass
                 state['pending'] = True
                 self._flush_parallel_pending(state)
             elif self._is_download_complete_line(line):
@@ -3902,8 +4054,13 @@ class AuraDownloader(QMainWindow):
         if total > 0:
             text = self.t["progress_format"].format(downloaded=downloaded, total=total)
             self.progress_label.setText(text)
-            # Overall progress bar = videos completed / total videos
-            self.progress_bar.setValue(int(downloaded * 100 / total))
+            # Weighted overall progress: completed videos + current files across workers
+            avg_pct = 0
+            active_workers = [s for s in states if s['pct'] > 0 and s['downloaded'] < s['total']]
+            if active_workers:
+                avg_pct = sum(s['pct'] for s in active_workers) / len(active_workers)
+            overall = (downloaded * 100 + avg_pct) / total
+            self.progress_bar.setValue(int(min(overall, 100)))
         else:
             # No totals yet — average current file percentages across workers
             pcts = [s['pct'] for s in states if s['pct'] > 0]
@@ -4119,6 +4276,21 @@ class AuraDownloader(QMainWindow):
             for w in getattr(self, '_parallel_workers', []):
                 w.stop()
                 w.wait(3000)
+                if w.isRunning():
+                    try:
+                        w.terminate()
+                    except Exception:
+                        pass
+            # Kill restart mode subprocess
+            if self._restart_process:
+                try:
+                    self._restart_process.terminate()
+                    self._restart_process.wait(timeout=PROCESS_TERMINATE_TIMEOUT)
+                except Exception:
+                    try:
+                        self._restart_process.kill()
+                    except Exception:
+                        pass
             
             self.log(self.t.get("reset_log_header", "🗑️ === FULL SETTINGS RESET ==="))
             
@@ -4770,6 +4942,16 @@ class AuraDownloader(QMainWindow):
         
         output_template = self._get_output_template(outdir, mode)
         
+        # Warn about SponsorBlock re-encoding (remove + force-keyframes)
+        if (self.platform == "youtube" and self.chk_sb and self.chk_sb.isChecked()
+                and self._get_sb_action() == "remove"
+                and self.chk_sb_keyframes.isChecked()):
+            reply = QMessageBox.question(self, "⚠️",
+                self.t.get("sb_reencode_warn", "SponsorBlock + Precise cuts will re-encode the entire video. Continue?"),
+                QMessageBox.Yes | QMessageBox.No)
+            if reply != QMessageBox.Yes:
+                return
+        
         settings_dir = get_settings_dir()
         settings_dir.mkdir(parents=True, exist_ok=True)
         archive_path = settings_dir / f"archive_{self.platform}.txt"
@@ -4778,6 +4960,9 @@ class AuraDownloader(QMainWindow):
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self.stop_event.clear()
+        self._download_generation += 1
+        self._restart_process = None
+        self._restart_thread = None
         
         self.log("")
         self.log("=" * 50)
@@ -4844,12 +5029,27 @@ class AuraDownloader(QMainWindow):
         self._parallel_total = concurrent
         self._is_parallel_mode = True
         self._parallel_state = {}
+        self._parallel_archive_main = archive_path  # Main archive file
+        self._parallel_archive_parts = []  # Per-worker archive files
         
         for i in range(concurrent):
             worker_id = i + 1
             items_arg = f"{worker_id}::{concurrent}"
             
-            cmd = self._build_command(mode, url, cookies, output_template, archive_path)
+            # Use per-worker archive file to avoid race condition
+            worker_archive = None
+            if archive_path and self.chk_archive.isChecked():
+                ap = Path(archive_path)
+                worker_archive = str(ap.parent / f"{ap.stem}_w{worker_id}{ap.suffix}")
+                self._parallel_archive_parts.append(worker_archive)
+                # Copy main archive to each worker so they all know what's already downloaded
+                try:
+                    if ap.exists():
+                        shutil.copy2(str(ap), worker_archive)
+                except Exception:
+                    pass
+            
+            cmd = self._build_command(mode, url, cookies, output_template, worker_archive or archive_path)
             cmd.insert(-1, "--playlist-items")
             cmd.insert(-1, items_arg)
             
@@ -4881,6 +5081,29 @@ class AuraDownloader(QMainWindow):
             self.log(self.t.get("log_worker_done", "  ℹ️ Worker finished (code {code}), {remaining} still running...").format(
                 code=return_code, remaining=remaining))
             return
+        
+        # All workers done — merge per-worker archive files into main archive
+        main_archive = getattr(self, '_parallel_archive_main', None)
+        parts = getattr(self, '_parallel_archive_parts', [])
+        if main_archive and parts:
+            try:
+                # Collect all unique video IDs from per-worker archives
+                all_ids = set()
+                if Path(main_archive).exists():
+                    all_ids.update(Path(main_archive).read_text(encoding='utf-8').strip().splitlines())
+                for part in parts:
+                    p = Path(part)
+                    if p.exists():
+                        all_ids.update(p.read_text(encoding='utf-8').strip().splitlines())
+                        try:
+                            p.unlink()  # Clean up per-worker file
+                        except Exception:
+                            pass
+                # Write merged archive
+                if all_ids:
+                    Path(main_archive).write_text('\n'.join(sorted(all_ids)) + '\n', encoding='utf-8')
+            except Exception as e:
+                self.log(f"⚠️ Archive merge: {e}")
         
         # All workers done — report overall result
         worst_code = max(self._parallel_codes) if self._parallel_codes else 0
@@ -4961,6 +5184,9 @@ class AuraDownloader(QMainWindow):
             if w.isRunning():
                 has_running = True
                 break
+        # Restart mode uses threading.Thread + subprocess, not QThread workers
+        if self._restart_thread and self._restart_thread.is_alive():
+            has_running = True
         
         if has_running:
             reply = QMessageBox.question(self, "⏹", self.t.get("stop_confirm", "Stop download?"),
@@ -4974,6 +5200,17 @@ class AuraDownloader(QMainWindow):
         for w in getattr(self, '_parallel_workers', []):
             w.stop()
         self._parallel_workers = []
+        # Kill restart mode subprocess directly (don't wait for stdout loop to notice)
+        if self._restart_process:
+            try:
+                self._restart_process.terminate()
+                self._restart_process.wait(timeout=PROCESS_TERMINATE_TIMEOUT)
+            except Exception:
+                try:
+                    self._restart_process.kill()
+                except Exception:
+                    pass
+            self._restart_process = None
         
         self.log(f"\n⏹ {self.t['download_stopped']}\n")
         self.start_btn.setEnabled(True)
@@ -4985,6 +5222,7 @@ class AuraDownloader(QMainWindow):
         
         # Build command on main thread (widgets accessed safely)
         base_cmd = self._build_command(mode, url, cookies, output_template, archive_path, max_downloads=1)
+        generation = self._download_generation  # Capture — ignore stale callbacks
         
         def _restart_loop():
             empty_runs = 0
@@ -5000,6 +5238,7 @@ class AuraDownloader(QMainWindow):
                                                 text=True, encoding='utf-8', errors='surrogateescape',
                                                 creationflags=SUBPROCESS_FLAGS, env=_get_subprocess_env(),
                                                 bufsize=1)
+                    self._restart_process = process  # Track for stop/close cleanup
                     found_new = False
                     for line in process.stdout:
                         if self.stop_event.is_set():
@@ -5017,6 +5256,7 @@ class AuraDownloader(QMainWindow):
                                 found_new = True
                     
                     process.wait()
+                    self._restart_process = None
                     
                     if found_new:
                         empty_runs = 0
@@ -5025,11 +5265,17 @@ class AuraDownloader(QMainWindow):
                 
                 except Exception as e:
                     self._sig_log.emit(f"❌ {e}")
+                    self._restart_process = None
                     break
             
-            self._sig_finished.emit(0)
+            # Only emit finished if this is still the current download
+            # (user may have stopped and started a new one)
+            if self._download_generation == generation:
+                self._sig_finished.emit(0)
         
-        threading.Thread(target=_restart_loop, daemon=True).start()
+        t = threading.Thread(target=_restart_loop, daemon=True)
+        self._restart_thread = t
+        t.start()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
