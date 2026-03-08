@@ -5,6 +5,7 @@
   Powered by yt-dlp + ffmpeg
 </p>
 Now it has an Official Discord Server: https://discord.gg/bJwrs6jP (i will update the link when it expires)
+
 <p align="center">
   <img src="https://img.shields.io/badge/platform-Windows-blue?logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/license-free-green" alt="Free">
