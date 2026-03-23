@@ -4,7 +4,6 @@
   <b>All features of 4K Video Downloader Plus — free and forever.</b><br>
   Powered by yt-dlp + ffmpeg
 </p>
-Now it has an Official Discord Server: https://discord.gg/bJwrs6jP (i will update the link when it expires)
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-Windows-blue?logo=windows&logoColor=white" alt="Windows">
