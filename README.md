@@ -14,710 +14,655 @@ Now it has an Official Discord Server: https://discord.gg/bJwrs6jP (i will updat
 
 ---
 
-**🌍 Language / Язык:**  [English](#-english-guide) · [Русский](#-руководство-на-русском)
 
----
+![Python](https://img.shields.io/badge/python-3.9%2B-blue)
+![Platform](https://img.shields.io/badge/platform-Windows-0078D6)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Tests](https://img.shields.io/badge/tests-137%20collected-brightgreen)
+![Platforms](https://img.shields.io/badge/platforms-23-orange)
 
-# 🇬🇧 English Guide
+Aura Video Downloader 2.0 is a Windows-first desktop GUI built with Python, PySide6, yt-dlp, and ffmpeg. It wraps a powerful command-line stack in a structured multi-workspace interface with per-platform settings, inspection tools, queue/history management, subscription automation, crash recovery, and optional in-app browser/media-player features.
 
-## 📋 Table of Contents
+This repository is the modular 2.0 generation of Aura. The legacy single-file implementation is still present as [`old version.py`](./old%20version.py) for historical comparison, but the active application now lives in the `aura/` package.
 
-- [What Is This?](#what-is-this)
+## Table of Contents
+
+- [What 2.0 Is](#what-20-is)
+- [Version 2.0 Highlights](#version-20-highlights)
 - [Supported Platforms](#supported-platforms)
-- [What You Need Before Starting](#what-you-need-before-starting)
-  - [Step 1: Download Aura](#step-1-download-aura)
-  - [Step 2: Create a folder for dependencies](#step-2-create-a-folder-for-dependencies)
-  - [Step 3: Install yt-dlp](#step-3-install-yt-dlp)
-  - [Step 4: Install ffmpeg](#step-4-install-ffmpeg)
-  - [Step 5: Install aria2c (optional but recommended)](#step-5-install-aria2c-optional-but-recommended)
-  - [Step 6: Install Node.js (required for YouTube)](#step-6-install-nodejs-required-for-youtube)
-  - [Step 7: Add the folder to PATH](#step-7-add-the-folder-to-path)
-  - [Step 8: Verify Everything Works](#step-8-verify-everything-works)
-- [How to Launch](#how-to-launch)
-- [First Launch — Step by Step](#first-launch--step-by-step)
-- [Using the Program](#using-the-program)
-  - [Downloading a Video](#downloading-a-video)
-  - [Downloading Audio Only](#downloading-audio-only)
-  - [Downloading an Entire Channel or Playlist](#downloading-an-entire-channel-or-playlist)
-  - [SponsorBlock (YouTube Only)](#sponsorblock-youtube-only)
-- [Options Explained](#options-explained)
-- [Presets](#presets)
-- [Switching Platforms](#switching-platforms)
-- [System Tray Icon](#system-tray-icon)
-- [Updating Dependencies](#updating-dependencies)
-- [Troubleshooting](#troubleshooting)
+- [Feature Map](#feature-map)
+- [Installation](#installation)
+- [First Launch Flow](#first-launch-flow)
+- [Workspace Layout](#workspace-layout)
+- [Detailed Feature Breakdown](#detailed-feature-breakdown)
+- [Typical Workflows](#typical-workflows)
+- [Data and File Layout](#data-and-file-layout)
+- [Project Structure](#project-structure)
+- [Testing and Quality](#testing-and-quality)
+- [2.0 vs Legacy `old version.py`](#20-vs-legacy-old-versionpy)
+- [Important Notes](#important-notes)
+- [License](#license)
 
----
+## What 2.0 Is
 
-## What Is This?
+Aura 2.0 is no longer just a "pretty button row for yt-dlp". The application is organized around a few clear goals:
 
-**Aura Video Downloader** is a free, open-source program that lets you download videos and audio from 17+ websites — YouTube, TikTok, Instagram, VK, and many more.
+- Keep the main thread responsive while downloads, probing, preview extraction, dependency checks, and subscription scans run in background workers.
+- Separate UI, workers, persistence, and pure business logic so the project is maintainable.
+- Support more than one usage style: quick one-off downloads, detailed inspection, unattended queueing, recurring subscriptions, and crash-safe recovery.
+- Store settings per platform, so switching from YouTube to VK or TikTok does not destroy your previous setup.
+- Expose advanced yt-dlp behavior without forcing users to type command lines manually.
 
-It does everything that paid programs like "4K Video Downloader Plus" ($45) do, but completely free. Under the hood it uses **yt-dlp** (the download engine) and **ffmpeg** (the audio/video processor) — Aura just wraps them in a convenient, beautiful interface.
+Aura remains a fully local desktop application. It does not provide a remote service, hosted downloader, or cloud account system.
 
-**No installation required** — Aura is a single `.exe` file. Just download and run.
+## Version 2.0 Highlights
 
----
+- Modular package architecture instead of one monolithic script.
+- 23 supported platforms instead of 17.
+- New Search mode in addition to single video, audio-only, playlist, and channel/profile modes.
+- Dedicated dialogs for format inspection, metadata preview, item picking, dependency warnings, cookie login, discovery browsing, and playback.
+- SQLite-backed downloads, subscriptions, and recovery sessions.
+- Subscription automation with scheduler support.
+- Full-state export/import for backup and migration.
+- Per-download "Execution Blueprint" preview before launching yt-dlp.
+- Advanced audio pipeline with language-aware selection, dubbed-audio export, and container/compatibility helpers.
+- M3U manifest generation for multi-item downloads.
+- Expanded parallel download control up to 7 workers.
+- 137 collected automated tests covering runtime, UI smoke behavior, workers, persistence, and bootstrap flows.
 
 ## Supported Platforms
 
+Aura 2.0 currently ships platform profiles for 23 sites/services:
+
 | Category | Platforms |
-|----------|-----------|
-| 🎬 Video | YouTube, VK Video, Rutube, Twitch, Dailymotion, Vimeo, Bilibili, OK.ru, Дзен |
-| 📱 Social | TikTok, Instagram, Twitter/X, Facebook, Reddit |
-| 🔞 Adult | Pornhub, XVideos, xHamster |
+| --- | --- |
+| Video | YouTube, VK Video, Rutube, Twitch, Dailymotion, Vimeo, Bilibili / Bilibili TV, OK.ru, Dzen, Rumble, BitChute, Naver TV / Blog |
+| Social / Media | SoundCloud, TikTok, Instagram, Twitter / X, Facebook, Reddit, Flickr, Tumblr |
+| Adult | Pornhub, XVideos, xHamster |
 
----
+Notes:
 
-## What You Need Before Starting
+- Platform capabilities are not identical. Some support channels/profiles, some support playlists, and some expose search mode.
+- Search mode is currently enabled on platforms that define an internal search backend in the app configuration: YouTube, Rumble, and BitChute.
+- Actual extraction support still depends on yt-dlp and the current state of each website.
 
-Aura itself is just one `.exe` file — no installation needed. But it relies on helper programs that must be present on your computer:
+## Feature Map
 
-| Program | Required? | What it does |
-|---------|-----------|-------------|
-| **yt-dlp** | ✅ Required | The engine — actually downloads videos from websites |
-| **ffmpeg** | ✅ Required | Merges video + audio, converts formats |
-| **Node.js** | ✅ Required for YouTube | JavaScript runtime needed by yt-dlp to solve YouTube challenges |
-| **aria2c** | ⭐ Optional | Download accelerator — makes downloads significantly faster |
+| Area | What Aura 2.0 provides |
+| --- | --- |
+| Download modes | Single video/media, audio-only extraction, playlist, channel/profile/community, search-result download flows |
+| Format inspection | Full format table with codec, resolution, FPS, bitrate, language, size, and notes |
+| Metadata preview | Thumbnail, title, uploader, duration, approximate size, upload date, views, audio-track languages, subtitle languages, immersive profile hints |
+| Manual item selection | Pick specific entries from playlists/channels/search results before downloading |
+| Batch link import | Paste plain-text URLs or CSV-like input and queue many links at once |
+| Audio pipeline | WAV / MP3 / M4A / OGG, bitrate controls, audio-language preference, source selection, dubbed-audio export |
+| Subtitle pipeline | Subtitle language selection, auto-subtitle awareness, conversion, optional embedding |
+| Auth | No auth, cookies.txt, or browser-cookie extraction from Chrome / Firefox / Edge / Brave / Opera / Chromium / Safari |
+| Browser tools | Optional login browser for cookie capture, optional discovery browser for navigating media pages inside Aura |
+| Performance | aria2c integration, unified speed graph, bandwidth controls, per-item restart mode, parallel workers up to 7 |
+| Persistence | Per-platform JSON settings, presets, download archives, SQLite database, session snapshots |
+| Automation | Presets, subscription monitoring, scheduler, background/tray behavior |
+| Reliability | Atomic writes, `.bak` backups, subprocess tracking, atexit cleanup, crash recovery prompt |
+| UX | Responsive layout, theme support, English/Russian UI, execution blueprint, queue/history pages, built-in player (optional multimedia module) |
 
-yt-dlp, ffmpeg, and aria2c are just `.exe` files — we'll put them all in **one folder** and tell Windows where to find it. Node.js has its own installer and installs separately.
+## Installation
 
-> **⚠️ IMPORTANT:** yt-dlp, ffmpeg, and aria2c must be installed as **standalone programs** (`.exe` files in a folder on your disk), **NOT** as Python libraries. Aura calls them as external commands — they must be accessible from the command line.
+Aura can be used from source or from a packaged Windows release. The source layout is the authoritative reference in this repository.
 
----
+### Requirements
 
-### Step 1: Download Aura
+| Component | Required | Why it matters |
+| --- | --- | --- |
+| Python 3.9+ | Yes | Base runtime for the app |
+| PySide6 | Yes | Qt GUI toolkit |
+| yt-dlp | Yes | Extraction/downloading engine |
+| ffmpeg | Strongly recommended / effectively required for many workflows | Merging, remuxing, subtitle embedding, conversion, post-processing |
+| Node.js | Recommended for YouTube, required for some YouTube scenarios | JavaScript runtime for yt-dlp YouTube handling |
+| aria2c | Optional | Multi-connection acceleration |
+| PySide6-WebEngine | Optional | In-app login browser and discovery browser |
+| PySide6-Multimedia | Optional | Built-in media player |
 
-1. Download `Aura_Video_Downloader.exe` from the [Releases](../../releases) page
-2. Put it anywhere you like — for example, on your Desktop or in a `C:\Aura\` folder
-3. That's it — Aura doesn't need installation
+### Install from source
 
----
-
-### Step 2: Create a folder for dependencies
-
-We'll put all helper programs into **one folder**. We recommend calling it `aura_dependencies`, but you can name it anything you want.
-
-1. Open File Explorer (the folder icon on your taskbar)
-2. In the left panel, click **"This PC"**
-3. Double-click on **"Local Disk (C:)"**
-4. Right-click on an empty space → **New** → **Folder**
-5. Name the folder **`aura_dependencies`** and press Enter
-
-> **💡 Note:** The folder name doesn't matter — you can call it `tools`, `programs`, or whatever you like. What matters is that you add it to PATH (Step 6). We use `aura_dependencies` in this guide so it's easy to follow.
-
----
-
-### Step 3: Install yt-dlp
-
-1. Go to [github.com/yt-dlp/yt-dlp/releases/latest](https://github.com/yt-dlp/yt-dlp/releases/latest)
-2. Scroll down to the **"Assets"** section (you may need to click the word "Assets" to expand it)
-3. Find and download the file **`yt-dlp.exe`** (just click on it)
-4. Move the downloaded `yt-dlp.exe` into **`C:\aura_dependencies`**
-
----
-
-### Step 4: Install ffmpeg
-
-1. Go to [gyan.dev/ffmpeg/builds](https://www.gyan.dev/ffmpeg/builds/)
-2. Under **"Release builds"**, download **`ffmpeg-release-essentials.zip`**
-3. Open the `.zip` file. Inside: a folder like `ffmpeg-7.1-essentials_build` → open it → open **`bin`**
-4. You'll see three files: **`ffmpeg.exe`**, **`ffprobe.exe`**, **`ffplay.exe`**
-5. Copy all three into **`C:\aura_dependencies`**
-
----
-
-### Step 5: Install aria2c (optional but recommended)
-
-aria2c is a download accelerator. When enabled, it splits files into multiple parts and downloads them simultaneously, making downloads **2–5× faster**. Aura works without it, but we highly recommend installing it.
-
-1. Go to [github.com/aria2/aria2/releases/latest](https://github.com/aria2/aria2/releases/latest)
-2. In the Assets section, download the file that ends with **`-win-64bit-build1.zip`** (for example, `aria2-1.37.0-win-64bit-build1.zip`)
-3. Open the `.zip` file → inside you'll find `aria2c.exe`
-4. Copy **`aria2c.exe`** into **`C:\aura_dependencies`**
-
----
-
-✅ When done, the `C:\aura_dependencies` folder should contain these files:
-
-```
-C:\aura_dependencies\
-  ├── yt-dlp.exe        ← required
-  ├── ffmpeg.exe        ← required
-  ├── ffprobe.exe       ← required
-  ├── ffplay.exe        ← required
-  └── aria2c.exe        ← optional (recommended)
+```bash
+git clone https://github.com/your-account/aura-video-downloader.git
+cd aura-video-downloader
+python -m venv .venv
+.venv\Scripts\activate
+pip install -U pip
+pip install .
 ```
 
----
+If you want the optional GUI browser and built-in player:
 
-### Step 6: Install Node.js (required for YouTube)
-
-Node.js is a JavaScript runtime that yt-dlp needs to solve YouTube's anti-bot challenges. Without it, YouTube downloads may fail or have limited quality. If you only plan to download from other platforms (VK, TikTok, etc.), you can skip this step.
-
-> **⚠️ Note:** Unlike the other tools above, Node.js has its own installer — you do **NOT** put it in the `aura_dependencies` folder. It installs system-wide and adds itself to PATH automatically.
-
-1. Go to [nodejs.org](https://nodejs.org/)
-2. Download the **LTS** version (the big green button on the left)
-3. Run the downloaded installer
-4. Click **"Next"** on each screen, keeping all default settings
-5. **Make sure** the checkbox **"Automatically install the necessary tools"** is checked (if present)
-6. Click **"Install"**, wait for it to finish, then click **"Finish"**
-
-Node.js installs itself into `C:\Program Files\nodejs\` and **automatically adds itself to PATH** — no manual PATH setup needed.
-
----
-
-### Step 7: Add the folder to PATH
-
-PATH is a system setting that tells Windows where to look for programs. We need to add `C:\aura_dependencies` to PATH so that Aura can find yt-dlp, ffmpeg, and aria2c.
-
-**Follow these steps carefully:**
-
-1. Press **`Win + R`** on your keyboard (hold the Windows key and press the letter R)
-2. A small "Run" window appears. Type **`sysdm.cpl`** and press **Enter**
-3. A "System Properties" window opens. Click the **"Advanced"** tab at the top
-4. Click the **"Environment Variables..."** button near the bottom
-5. In the **bottom half** of the new window (the section called "System variables"), find the row that says **`Path`** and **double-click** on it
-6. A list of folder paths appears. Click the **"New"** button
-7. Type exactly: **`C:\aura_dependencies`**
-8. Press **Enter**, then click **"OK"**
-9. Click **"OK"** again to close the Environment Variables window
-10. Click **"OK"** one last time to close System Properties
-
-> **💡 Important:** After changing PATH, you must **close and re-open** any Command Prompt windows for the change to take effect.
-
-> **💡 Custom folder name?** If you named your folder something other than `aura_dependencies`, type that path instead in step 7 (e.g., `C:\my_tools`).
-
----
-
-### Step 8: Verify Everything Works
-
-1. Press **`Win + R`**, type **`cmd`**, press **Enter** — a Command Prompt opens
-2. Run these commands one by one:
-
-```
-yt-dlp --version
-```
-✅ Expected: a date like `2025.01.15`
-
-```
-ffmpeg -version
-```
-✅ Expected: version info starting with `ffmpeg version 7...`
-
-```
-aria2c --version
-```
-✅ Expected: version info starting with `aria2 version 1...` (if you installed it)
-
-```
-node --version
-```
-✅ Expected: a version like `v22.12.0` (if you installed it for YouTube)
-
-**All commands work?** You're all set! Jump to [How to Launch](#how-to-launch).
-
-❌ **See "is not recognized"?** PATH was not set correctly. Go back to [Step 7](#step-7-add-the-folder-to-path). Make sure:
-- The folder `C:\aura_dependencies` exists and contains the `.exe` files
-- You typed the path exactly right, with no typos
-- You clicked "OK" on **all three** windows
-- You opened a **new** Command Prompt after making the change
-
----
-
-## How to Launch
-
-Double-click **`Aura_Video_Downloader.exe`** — that's it!
-
-No installation, no setup wizards, no admin rights needed. Aura will automatically check for yt-dlp, ffmpeg, and aria2c and show their status in the Dependencies section.
-
----
-
-## First Launch — Step by Step
-
-The very first time you run Aura, it will ask you four quick questions:
-
-### 1️⃣ Language
-
-Choose: **Русский** (Russian) or **English**. This affects all text in the program.
-
-### 2️⃣ Settings Location
-
-Choose where Aura saves your settings:
-
-- **🏠 Home Folder** — standard location. **Recommended.**
-- **📂 Custom Folder** — pick any folder (handy for USB portability)
-
-### 3️⃣ Theme
-
-Pick a visual style: light, dark, or a colored theme. Changeable anytime later.
-
-### 4️⃣ Platform
-
-Choose which website to download from. Each platform gets independent settings. Switch later with the **"🔄 Change platform"** button.
-
-After these four steps — start downloading!
-
----
-
-## Using the Program
-
-### Downloading a Video
-
-1. Make sure **📺 Video** mode is selected (default)
-2. **Paste** the video URL into the field at the top (`Ctrl+V`)
-3. Choose where to save — click **📂** to pick a folder
-4. Pick video quality: 8K, 4K, 2K, 1080p, 720p, 480p, 360p, or "best available"
-5. Click **▶ Start**
-6. Done! The video is in a subfolder named after the platform (e.g., `YouTube/`)
-
-### Downloading Audio Only
-
-1. Switch to **🎵 Audio** mode
-2. Pick the source: From video / From playlist / From channel
-3. Pick format: MP3, FLAC, WAV, M4A, OGG, or OPUS
-4. Pick quality: 128k, 192k, 256k, 320k, or Max
-5. Paste the URL and click **▶ Start**
-
-### Downloading an Entire Channel or Playlist
-
-1. Switch to **📁 Channel** or **📋 Playlist** mode
-2. Paste the URL
-3. Pick quality
-4. Useful options:
-   - **📜 Use archive.txt** — re-running only grabs **new** videos
-   - **📊 Oldest to newest** — chronological order
-   - **🔢 No file numbering** — removes `00001_` prefix
-   - **🔄 Restart after each video** — helps with unstable internet
-
-### SponsorBlock (YouTube Only)
-
-1. Check **☑ SponsorBlock**
-2. Pick action: **Mark** (add chapters) or **Remove** (cut segments out)
-3. Choose categories: sponsors, intros, outros, self-promotion, etc.
-
----
-
-## Options Explained
-
-| Option | What It Does |
-|--------|-------------|
-| 🔔 Notify on finish | Windows notification when downloads complete (only in background) |
-| 📜 Use archive.txt | Tracks downloaded videos to skip re-downloads |
-| 📊 Oldest to newest | Download in chronological order |
-| 🔢 No file numbering | Remove `00001_` prefix from filenames |
-| 🔄 Restart process | Restart yt-dlp after each video (fixes connection drops) |
-| 📝 Subtitles | Download subtitles in your chosen language |
-| 🚀 aria2c | Use the aria2c download accelerator (must be in PATH — see Step 5) |
-| ⚡ Parallel downloads | Download 2–5 videos simultaneously |
-| 🔒 Authentication | Use browser cookies for private/age-restricted content |
-| 🌐 Proxy | Route downloads through a proxy server |
-
----
-
-## Presets
-
-- **💾 Save preset** — saves all current options under a name
-- **📂 Load preset** — restores previously saved settings
-
----
-
-## Switching Platforms
-
-Click **🔄 Change platform** in "App Settings". Settings are saved automatically before switching. Each platform is fully independent.
-
----
-
-## System Tray Icon
-
-While running, Aura shows an icon near the clock:
-
-- **Left-click** → bring the window to the front
-- **Right-click** → menu: Reset settings / Close
-
----
-
-## Updating Dependencies
-
-If downloads stop working, yt-dlp usually needs an update:
-
-1. Go to [github.com/yt-dlp/yt-dlp/releases/latest](https://github.com/yt-dlp/yt-dlp/releases/latest)
-2. Download the new `yt-dlp.exe`
-3. Replace the old file in `C:\aura_dependencies\`
-
-Or click **"🔄 yt-dlp → master"** inside Aura.
-
-ffmpeg and aria2c almost never need updating.
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| `'yt-dlp' is not recognized` | Not in PATH — redo [Step 7](#step-7-add-the-folder-to-path) |
-| `'ffmpeg' is not recognized` | Not in PATH — make sure `ffmpeg.exe` is in `C:\aura_dependencies\` |
-| Video has no audio | ffmpeg is missing or not in PATH |
-| "n challenge solving failed" | Node.js is not installed — follow [Step 6](#step-6-install-nodejs-required-for-youtube) |
-| "HTTP Error 403: Forbidden" | Set up Authentication → Browser cookies → pick your browser |
-| "Private video" / "Sign in required" | Same — you need browser cookies |
-| Very slow downloads | Install aria2c ([Step 5](#step-5-install-aria2c-optional-but-recommended)) and enable the 🚀 aria2c checkbox |
-| Downloads suddenly stopped working | Update yt-dlp — see [Updating Dependencies](#updating-dependencies) |
-| Program won't start | Check that your antivirus isn't blocking the `.exe` |
-
----
----
-
-# 🇷🇺 Руководство на русском
-
-## 📋 Содержание
-
-- [Что это за программа?](#что-это-за-программа)
-- [Поддерживаемые платформы](#поддерживаемые-платформы-1)
-- [Что нужно для работы](#что-нужно-для-работы)
-  - [Шаг 1: Скачайте Aura](#шаг-1-скачайте-aura)
-  - [Шаг 2: Создайте папку для зависимостей](#шаг-2-создайте-папку-для-зависимостей)
-  - [Шаг 3: Установите yt-dlp](#шаг-3-установите-yt-dlp)
-  - [Шаг 4: Установите ffmpeg](#шаг-4-установите-ffmpeg)
-  - [Шаг 5: Установите aria2c (необязательно, но рекомендуется)](#шаг-5-установите-aria2c-необязательно-но-рекомендуется)
-  - [Шаг 6: Установите Node.js (обязательно для YouTube)](#шаг-6-установите-nodejs-обязательно-для-youtube)
-  - [Шаг 7: Добавьте папку в PATH](#шаг-7-добавьте-папку-в-path)
-  - [Шаг 8: Проверка](#шаг-8-проверка)
-- [Как запустить](#как-запустить)
-- [Первый запуск — по шагам](#первый-запуск--по-шагам-1)
-- [Как пользоваться](#как-пользоваться)
-  - [Скачать видео](#скачать-видео)
-  - [Скачать только аудио](#скачать-только-аудио)
-  - [Скачать весь канал или плейлист](#скачать-весь-канал-или-плейлист)
-  - [SponsorBlock (только YouTube)](#sponsorblock-только-youtube-1)
-- [Описание опций](#описание-опций)
-- [Пресеты](#пресеты)
-- [Смена платформы](#смена-платформы)
-- [Иконка в трее](#иконка-в-трее)
-- [Обновление зависимостей](#обновление-зависимостей)
-- [Решение проблем](#решение-проблем)
-
----
-
-## Что это за программа?
-
-**Aura Video Downloader** — это бесплатная программа для скачивания видео и аудио с 17+ сайтов: YouTube, TikTok, ВКонтакте, Instagram и многих других.
-
-Она делает всё то же, что платные программы вроде «4K Video Downloader Plus» (за $45), но совершенно бесплатно. Внутри работают **yt-dlp** (скачивает видео с сайтов) и **ffmpeg** (склеивает видео со звуком, конвертирует форматы) — а Aura даёт им красивый и понятный интерфейс.
-
-**Установка не нужна** — Aura это один `.exe` файл. Скачали — запустили.
-
----
-
-## Поддерживаемые платформы
-
-| Категория | Платформы |
-|-----------|-----------|
-| 🎬 Видео | YouTube, VK Video, Rutube, Twitch, Dailymotion, Vimeo, Bilibili, OK.ru, Дзен |
-| 📱 Соцсети | TikTok, Instagram, Twitter/X, Facebook, Reddit |
-| 🔞 18+ | Pornhub, XVideos, xHamster |
-
----
-
-## Что нужно для работы
-
-Сама Aura — это один `.exe` файл, устанавливать его не надо. Но для работы ей нужны вспомогательные программы:
-
-| Программа | Обязательно? | Что делает |
-|-----------|-------------|-----------|
-| **yt-dlp** | ✅ Обязательно | Движок — непосредственно скачивает видео с сайтов |
-| **ffmpeg** | ✅ Обязательно | Склеивает видео и аудио, конвертирует форматы |
-| **Node.js** | ✅ Обязательно для YouTube | JavaScript-движок, нужен yt-dlp для решения защиты YouTube |
-| **aria2c** | ⭐ Необязательно | Ускоритель загрузки — скачивание становится в 2–5 раз быстрее |
-
-yt-dlp, ffmpeg и aria2c — это просто `.exe` файлы. Мы положим их в **одну папку** и скажем Windows, где её искать. Node.js устанавливается отдельно через свой установщик.
-
-> **⚠️ ВАЖНО:** yt-dlp, ffmpeg и aria2c — это **отдельные программы** (`.exe` файлы, которые нужно скачать и положить в папку), а **НЕ** библиотеки Python. Программа запускает их как внешние команды — они должны быть доступны из командной строки.
-
----
-
-### Шаг 1: Скачайте Aura
-
-1. Скачайте файл `Aura_Video_Downloader.exe` со страницы [Releases](../../releases)
-2. Положите его куда хотите — например, на Рабочий стол или в папку `C:\Aura\`
-3. Всё — установка не требуется
-
----
-
-### Шаг 2: Создайте папку для зависимостей
-
-Мы положим все вспомогательные программы в **одну папку**. Рекомендуем назвать её `aura_dependencies`, но можно дать любое название.
-
-1. Откройте Проводник (иконка папки на панели задач)
-2. В левой панели нажмите **«Этот компьютер»**
-3. Дважды щёлкните на **«Локальный диск (C:)»**
-4. Щёлкните правой кнопкой мыши на пустом месте → **«Создать»** → **«Папку»**
-5. Назовите папку **`aura_dependencies`** и нажмите Enter
-
-> **💡 Примечание:** Название папки не принципиально — можно назвать `tools`, `programs` или как угодно. Главное — потом добавить эту папку в PATH (Шаг 7). Мы используем `aura_dependencies` в этой инструкции для удобства.
-
----
-
-### Шаг 3: Установите yt-dlp
-
-1. Откройте сайт [github.com/yt-dlp/yt-dlp/releases/latest](https://github.com/yt-dlp/yt-dlp/releases/latest)
-2. Прокрутите вниз до раздела **«Assets»** (возможно, нужно нажать на слово «Assets», чтобы раскрыть)
-3. Найдите и скачайте файл **`yt-dlp.exe`** (просто нажмите на него)
-4. Переместите скачанный `yt-dlp.exe` в папку **`C:\aura_dependencies`**
-
----
-
-### Шаг 4: Установите ffmpeg
-
-1. Зайдите на сайт [gyan.dev/ffmpeg/builds](https://www.gyan.dev/ffmpeg/builds/)
-2. В разделе **«Release builds»** скачайте **`ffmpeg-release-essentials.zip`**
-3. Откройте архив. Внутри: папка вроде `ffmpeg-7.1-essentials_build` → откройте её → откройте **`bin`**
-4. Вы увидите три файла: **`ffmpeg.exe`**, **`ffprobe.exe`**, **`ffplay.exe`**
-5. Скопируйте все три в **`C:\aura_dependencies`**
-
----
-
-### Шаг 5: Установите aria2c (необязательно, но рекомендуется)
-
-aria2c — это ускоритель загрузки. Он разбивает файл на несколько частей и скачивает их одновременно, что делает загрузку **в 2–5 раз быстрее**. Aura работает и без него, но мы настоятельно рекомендуем установить.
-
-1. Зайдите на [github.com/aria2/aria2/releases/latest](https://github.com/aria2/aria2/releases/latest)
-2. В разделе «Assets» скачайте файл, который заканчивается на **`-win-64bit-build1.zip`** (например, `aria2-1.37.0-win-64bit-build1.zip`)
-3. Откройте архив — внутри найдёте файл `aria2c.exe`
-4. Скопируйте **`aria2c.exe`** в папку **`C:\aura_dependencies`**
-
----
-
-✅ Когда закончите, в папке `C:\aura_dependencies` должны быть такие файлы:
-
-```
-C:\aura_dependencies\
-  ├── yt-dlp.exe        ← обязательно
-  ├── ffmpeg.exe        ← обязательно
-  ├── ffprobe.exe       ← обязательно
-  ├── ffplay.exe        ← обязательно
-  └── aria2c.exe        ← необязательно (рекомендуется)
+```bash
+pip install ".[webengine,multimedia]"
 ```
 
----
+If you want development tools:
 
-### Шаг 6: Установите Node.js (обязательно для YouTube)
-
-Node.js — это JavaScript-движок, который нужен программе yt-dlp для обхода защиты YouTube. Без него загрузка с YouTube может не работать или выдавать ограниченное качество. Если вы планируете скачивать только с других платформ (ВК, TikTok и т.д.) — этот шаг можно пропустить.
-
-> **⚠️ Примечание:** В отличие от остальных программ, Node.js **НЕ** нужно класть в папку `aura_dependencies`. У него свой установщик, который всё сделает сам.
-
-1. Зайдите на сайт [nodejs.org](https://nodejs.org/)
-2. Скачайте версию **LTS** (большая зелёная кнопка слева)
-3. Запустите скачанный установщик
-4. На каждом экране нажимайте **«Next»** (Далее), оставляя все настройки по умолчанию
-5. **Убедитесь**, что галочка **«Automatically install the necessary tools»** стоит (если она есть)
-6. Нажмите **«Install»** (Установить), дождитесь окончания и нажмите **«Finish»** (Готово)
-
-Node.js устанавливается в `C:\Program Files\nodejs\` и **автоматически добавляется в PATH** — вручную ничего настраивать не надо.
-
----
-
-### Шаг 7: Добавьте папку в PATH
-
-PATH — это системная настройка, которая говорит Windows, где искать программы. Нам нужно добавить папку `C:\aura_dependencies` в PATH, чтобы Aura могла найти yt-dlp, ffmpeg и aria2c.
-
-**Следуйте этим шагам внимательно:**
-
-1. Нажмите на клавиатуре **`Win + R`** (зажмите клавишу Windows и нажмите букву R). Появится окошко «Выполнить»
-2. Введите **`sysdm.cpl`** и нажмите **Enter**
-3. Откроется окно «Свойства системы». Нажмите на вкладку **«Дополнительно»** вверху
-4. Нажмите кнопку **«Переменные среды...»** внизу окна
-5. В **нижней части** нового окна (раздел «Системные переменные») найдите строку **`Path`** и **дважды щёлкните** по ней
-6. Откроется список папок. Нажмите кнопку **«Создать»**
-7. Введите точно: **`C:\aura_dependencies`**
-8. Нажмите **Enter**, затем **«ОК»**
-9. Нажмите **«ОК»** ещё раз, чтобы закрыть окно «Переменные среды»
-10. Нажмите **«ОК»** последний раз, чтобы закрыть «Свойства системы»
-
-> **💡 Важно:** После изменения PATH нужно **закрыть и заново открыть** все окна командной строки.
-
-> **💡 Другое название папки?** Если вы назвали папку не `aura_dependencies`, впишите в шаге 7 ваш путь (например, `C:\мои_программы`).
-
----
-
-### Шаг 8: Проверка
-
-1. Нажмите **`Win + R`**, введите **`cmd`**, нажмите **Enter** — откроется командная строка
-2. Введите по очереди:
-
+```bash
+pip install ".[dev]"
 ```
-yt-dlp --version
+
+### External tools
+
+Aura expects command-line tools to be available in `PATH`:
+- `yt-dlp` (neccessary)
+- `ffmpeg` (strongly recommended)
+- `node`   (needed for YouTube)
+- `aria2c` (optional, for faster download)
+
+### Launch
+
+Any of the following is valid:
+
+```bash
+python Aura_Video_Downloader.py
 ```
-✅ Ожидаемый результат: дата, например `2025.01.15`
 
+```bash
+python -m aura
 ```
-ffmpeg -version
+
+```bash
+aura
 ```
-✅ Ожидаемый результат: информация о версии, начинающаяся с `ffmpeg version 7...`
 
+If you launch a portable `.exe`
+
+The app itself is also shipped as a portable executable, but the external helper tools still matter:
+
+- keep `ffmpeg` available in `PATH`
+- keep `node` available if you care about YouTube reliability
+- keep `aria2c` available if you want accelerated downloads
+- install `PySide6-WebEngine` / `PySide6-Multimedia` during packaging if  you want the optional GUI browser and built-in player
+
+## First Launch Flow
+
+On the first run, Aura 2.0 walks through a startup flow instead of dumping the user straight into the main window.
+
+### 1. Language
+
+Choose the interface language:
+
+- English
+- Russian
+
+### 2. Settings Location
+
+Choose where Aura stores its data:
+
+- default home-based path
+- custom folder for portable/self-contained usage
+
+Aura keeps only a small pointer file in the home directory and stores the rest inside the selected settings root.
+
+### 3. Theme
+
+Choose one of the built-in themes:
+
+- Light
+- Gray
+- Dark
+
+### 4. Platform
+
+Choose the active platform profile. Aura stores settings per platform, so switching later does not wipe previous selections.
+
+## Workspace Layout
+
+Aura 2.0 replaces the old long vertical control stack with a workspace-oriented layout.
+
+### Setup
+
+- Source: mode selection, URL/search input, search-result limit where supported
+- Video: quality, metadata language, video-oriented extraction settings
+- Audio Track: audio-only settings and preferred audio-language choices
+- Extra Audio: dubbed/translated audio export options
+
+### Download
+
+- Options: queueing, ordering, subtitles, SponsorBlock, container, compatibility policies, restart behavior
+- Files: output folders, cookies, login/browser actions, archives, file behavior
+- Tools: bandwidth controls, speed graph, format inspection, preview, player, command blueprint
+
+### Automation
+
+- Presets: save/load/delete platform-specific presets and auto-apply behavior
+- Subscriptions: monitor channels/playlists and queue new content automatically
+- Session: crash recovery and background-session behavior
+
+### Library
+
+- Queue: pending download entries and priority handling
+- History: completed/failed entries, filtering, sorting, cleanup
+
+### Activity
+
+- Real-time log view with optional log-file output
+
+### System
+
+- Dependency status, tool checks, install helpers, app settings, reset/export/import actions
+
+## Detailed Feature Breakdown
+
+### Download modes
+
+Aura 2.0 currently supports five main operating modes:
+
+1. Video
+2. Audio-only
+3. Playlist
+4. Channel / profile / page / community (depending on platform)
+5. Search
+
+Important behavior:
+
+- Search mode is available only on platforms that define a search backend.
+- Multi-item modes can use manual selection before downloading.
+- Playlist/channel/search downloads can run sequentially, restart item-by-item, or in parallel workers.
+- Reverse order is supported for applicable multi-item modes.
+
+### Execution Blueprint
+
+Before launching a download, Aura builds an execution preview that summarizes:
+
+- the current mode
+- quality and pipeline choices
+- platform and auth method
+- whether the run will be parallel or restart-per-item
+- warnings or missing dependencies
+- the exact command line that will be executed
+
+This is one of the most important 2.0 usability upgrades because it exposes advanced behavior without making users manually assemble yt-dlp commands.
+
+### Format inspection
+
+The format dialog is now a dedicated UI instead of an ad-hoc inline view. It shows:
+
+- format ID
+- extension
+- stream kind
+- language
+- resolution
+- FPS
+- codec
+- bitrate
+- reported size
+- extra notes
+
+The dialog also warns about common pitfalls:
+
+- video-only formats need an audio merge
+- audio-only formats make more sense in audio mode
+- WebM / VP9 / Opus combinations are usually safer with MKV or Auto container
+
+### Metadata preview
+
+The preview dialog collects and presents:
+
+- title
+- duration
+- approximate size (when reported)
+- uploader
+- upload date
+- view count
+- immersive-media hints
+- available audio-track languages
+- available subtitles / auto-subtitles
+- thumbnail preview
+
+This lets users inspect content before committing to the download.
+
+### Manual selection and batch import
+
+Aura 2.0 has two separate tools for multi-item workflows:
+
+- `BatchLinksDialog`: paste many links from plain text or CSV-style input
+- `ItemPickerDialog`: choose exactly which playlist/channel/search items should be downloaded
+
+These tools did not exist as dedicated dialogs in the legacy monolith.
+
+### Audio and language handling
+
+The audio pipeline is significantly more advanced in 2.0.
+
+Supported user-facing choices include:
+
+- audio-only extraction
+- audio format choice: WAV / MP3 / M4A / OGG
+- bitrate choice
+- preferred audio language
+- default/original/explicit language fallback behavior
+- metadata language preference (where supported by yt-dlp/platform)
+- "download all audio tracks" behavior for compatible scenarios
+
+### Dubbed / translated audio export
+
+2.0 adds a dedicated "Extra Audio" page for exporting dubbed or translated tracks as separate files after the main video download.
+
+Depending on platform/media availability, Aura can:
+
+- export selected dubbed tracks
+- export custom language-code selections
+- probe all available dubbed tracks for single-video workflows
+- choose output format for these follow-up files
+
+### Subtitles
+
+Aura exposes subtitle handling in a structured way:
+
+- subtitle enable/disable
+- language selection
+- auto-subtitle awareness
+- subtitle conversion
+- subtitle embedding
+
+The UI keeps subtitle settings visible only when relevant and threads them into the final yt-dlp command.
+
+### Auth, cookies, and browser helpers
+
+Auth choices are broader in 2.0 and are separated from the main clutter.
+
+Supported auth methods:
+
+- none
+- cookies.txt file
+- cookies from Chrome
+- cookies from Firefox
+- cookies from Edge
+- cookies from Brave
+- cookies from Opera
+- cookies from Chromium
+- cookies from Safari
+
+Optional WebEngine-powered browser tools:
+
+- login browser for extracting cookies into Netscape format
+- discovery browser for opening platform pages and continuing through related media without leaving Aura
+
+Special notes:
+
+- private YouTube lists such as Watch Later / Liked / History are supported as special targets
+- proxies are supported and wired directly into the runtime command
+- some platforms mark cookies as recommended rather than absolutely required
+
+### Performance and concurrency
+
+Aura 2.0 has more performance controls than the legacy build:
+
+- up to 7 parallel workers for multi-item downloads
+- aria2c acceleration
+- bandwidth throttling
+- restart-per-item mode for long queues
+- real-time speed graph
+- batched log flushing to reduce UI churn
+- throttled progress updates to reduce repaint pressure
+
+Parallel downloads also use per-worker archive handling to reduce duplicate-item race conditions.
+
+### Queue, history, and manifests
+
+Aura separates transient work from permanent history:
+
+- `DownloadQueue` handles prioritized queued items
+- the library queue page exposes pending entries
+- the history page stores completed activity
+- archive files prevent re-downloading already recorded items
+- M3U manifests can be generated for playlist-like downloads
+
+The app can also update subscription-related playlist manifests automatically after downloads finish.
+
+### Subscriptions and scheduler
+
+Subscriptions are one of the biggest functional jumps in 2.0.
+
+You can:
+
+- save channel or playlist subscriptions
+- attach runtime preset payloads
+- set per-subscription intervals
+- limit how many new entries are queued
+- enable/disable entries individually
+- run checks manually or on a schedule
+- process newly discovered items into the queue automatically
+
+The scheduler is handled in the desktop app, not as an external service.
+
+### Session recovery and background behavior
+
+Aura 2.0 saves enough state to recover long-running work after interruption:
+
+- active queue/session snapshots are written before risky work
+- downloads are tracked in the SQLite session table
+- subprocesses are tracked and cleaned up on exit
+- startup can offer recovery after a previous crash or abrupt stop
+- background/tray mode can keep the app alive without the main window staying visible
+
+### Full-state export/import
+
+The current app can export and import a fuller app snapshot than the legacy script:
+
+- database-backed state
+- queue/session information
+- subscriptions
+- related configuration state
+
+This is useful for migration, backup, testing, and reproducing user setups.
+
+### UI, localization, and responsiveness
+
+Aura 2.0 is still intentionally desktop-focused, but the UI is much more structured:
+
+- English and Russian translations
+- themed dialogs with shared chrome helpers
+- responsive workspace layouts
+- compact labels in narrow widths
+- dedicated hero/status cards
+- sidebar quick actions
+- separate pages for setup, automation, and library tasks
+
+### Optional built-in player
+
+If `PySide6-Multimedia` is installed, Aura can open downloaded files in its own player dialog. If the multimedia module is missing, the UI falls back gracefully and explains why the player is unavailable.
+
+## Typical Workflows
+
+### Download a single video
+
+1. Choose the platform.
+2. Select `Video` mode.
+3. Paste the media URL.
+4. Choose quality and container behavior.
+5. Open `Preview` if you want metadata first.
+6. Open `Formats` if you want to force a specific format ID.
+7. Start the download.
+
+### Extract audio only
+
+1. Switch to `Audio` mode.
+2. Choose output format and bitrate.
+3. Choose audio source scope if relevant.
+4. Optionally choose preferred audio language.
+5. Start the download.
+
+### Download only selected playlist items
+
+1. Open a playlist/channel/search target.
+2. Start the workflow.
+3. When the item picker appears, select only the entries you want.
+4. Continue with queue, parallelism, or restart-per-item settings.
+
+### Inspect before downloading
+
+Use the `Preview` and `Formats` tools together:
+
+- `Preview` answers "what is this item?"
+- `Formats` answers "which exact streams are available?"
+
+### Use Search mode
+
+On supported platforms:
+
+1. Switch to `Search` mode.
+2. Enter a text query instead of a direct URL.
+3. Set result count.
+4. Download directly or manually pick entries.
+
+### Build recurring automation
+
+1. Save a preset with your preferred output/auth/subtitle/quality settings.
+2. Open the subscriptions page.
+3. Add a channel or playlist subscription.
+4. Attach the preset/runtime payload.
+5. Set interval and limits.
+6. Enable scheduler/background behavior if you want unattended checks.
+
+### Recover after interruption
+
+If Aura was closed during active work:
+
+1. Relaunch the app.
+2. Review the recovery prompt if it appears.
+3. Restore queued items/session snapshot.
+4. Continue or clear the previous state.
+
+## Data and File Layout
+
+Aura stores its working data in a dedicated settings directory. The exact root is selected by the user during first launch.
+
+Typical contents:
+
+```text
+settings_dir/
+├── general.json
+├── config_<platform>.json
+├── presets_<platform>.json
+├── history_<platform>.json
+├── archive_<platform>.txt
+├── cookies_<platform>.txt
+├── aura_downloads.db
+├── yt-dlp.conf
+└── *.bak
 ```
-aria2c --version
+
+Important points:
+
+- `general.json` stores shared app-level choices such as theme.
+- `config_<platform>.json` stores platform-specific settings.
+- `presets_<platform>.json` stores reusable presets.
+- `archive_<platform>.txt` prevents duplicate downloads via yt-dlp archive logic.
+- `aura_downloads.db` stores downloads, subscriptions, and session recovery data.
+- `yt-dlp.conf` stores shared yt-dlp runtime config when needed.
+- Atomic JSON writes create `.bak` safety copies.
+
+## Project Structure
+
+The 2.0 codebase is package-based and split by responsibility:
+
+```text
+aura/
+├── app.py
+├── main_window.py
+├── constants.py
+├── database.py
+├── platforms.py
+├── settings.py
+├── themes.py
+├── utils.py
+├── core/
+│   ├── download_queue.py
+│   └── models.py
+├── dialogs/
+│   ├── batch_links_dialog.py
+│   ├── config_location.py
+│   ├── cookie_browser.py
+│   ├── discovery_browser.py
+│   ├── format_dialog.py
+│   ├── item_picker.py
+│   ├── missing_dependencies_dialog.py
+│   ├── player_dialog.py
+│   ├── preview_dialog.py
+│   ├── selectors.py
+│   └── ui_chrome.py
+├── widgets/
+│   └── speed_graph.py
+├── workers/
+│   ├── base.py
+│   ├── deps.py
+│   ├── download.py
+│   ├── download_prep.py
+│   ├── formats.py
+│   ├── playlist_entries.py
+│   ├── preview.py
+│   └── subscriptions.py
+├── translations/
+│   ├── en.json
+│   └── ru.json
+└── tests/
 ```
-✅ Ожидаемый результат: информация о версии, начинающаяся с `aria2 version 1...` (если устанавливали)
 
+The file that still carries most orchestration logic is `aura/main_window.py`, but the project is no longer a one-file application.
+
+## Testing and Quality
+
+Aura 2.0 includes automated coverage for:
+
+- bootstrap/runtime wiring
+- dialog smoke behavior
+- worker parsing
+- preview/format flows
+- queue/session persistence
+- responsive UI behavior
+- dependency checks
+- widget rendering sanity
+
+Commands:
+
+```bash
+python -m pytest aura/tests -v
 ```
-node --version
+
+```bash
+ruff check .
 ```
-✅ Ожидаемый результат: версия вроде `v22.12.0` (если устанавливали для YouTube)
 
-**Всё работает?** Поздравляем — переходите к [Как запустить](#как-запустить)!
+```bash
+mypy
+```
 
-❌ **Ошибка «не является внутренней или внешней командой»?** PATH настроен неправильно. Вернитесь к [Шагу 7](#шаг-7-добавьте-папку-в-path). Убедитесь, что:
-- Папка `C:\aura_dependencies` реально существует и содержит `.exe` файлы
-- Вы написали путь точно, без ошибок
-- Вы нажали «ОК» во **всех трёх** окнах
-- Вы открыли **новое** окно командной строки после изменений
+As of the current repository state, `pytest --collect-only` reports **137 collected tests**.
 
----
+## 2.0 vs Legacy `old version.py`
 
-## Как запустить
+This repository still includes the old monolithic script, which makes the upgrade path easy to inspect. The main differences are concrete and significant:
 
-Дважды щёлкните по файлу **`Aura_Video_Downloader.exe`** — и всё!
+- Architecture moved from one large script to a modular package with dedicated `core`, `workers`, `dialogs`, `widgets`, `translations`, and persistence modules.
+- Supported platform profiles expanded from **17** to **23**.
+- Added platform profiles: **Rumble, BitChute, Naver TV / Blog, SoundCloud, Flickr, Tumblr**.
+- Added **Search mode**; the legacy script exposed only channel, playlist, video, and audio flows.
+- Parallel worker limit increased from **5** to **7**.
+- Added a dedicated **SQLite database** for downloads, subscriptions, and recovery sessions.
+- Added **subscription automation** and a scheduler-backed monitoring flow.
+- Added **full-state export/import** instead of only history export.
+- Added dedicated dialogs for **format inspection, metadata preview, item picking, batch link paste, dependency warnings, config location, cookie browser, discovery browsing, and playback**.
+- Added **download-preparation workers** and richer runtime probing before launch.
+- Added **dubbed-audio export**, **M3U manifest generation**, **immersive-media detection**, and more advanced compatibility/container handling.
+- Added a much stronger automated regression suite.
 
-Установка не нужна. Права администратора не нужны. Aura автоматически проверит наличие yt-dlp, ffmpeg и aria2c и покажет их статус в разделе «Зависимости».
+## Important Notes
 
----
+- Aura depends heavily on yt-dlp. If a website changes, extraction behavior may change until yt-dlp catches up.
+- Some features are optional because the relevant Qt module is optional:
+  - browser/login/discovery features need `PySide6-WebEngine`
+  - the built-in player needs `PySide6-Multimedia`
+- `ffmpeg` is not technically required for every trivial download, but many real-world workflows need it. Treat it as a practical requirement.
+- YouTube behavior is the most sensitive to site-side changes. Keeping `yt-dlp` and Node.js current is strongly recommended.
+- Platform support does not imply identical feature parity across sites. Some sites do not support playlists, channels, or search mode.
+- The repository also contains legacy artifacts such as `old version.py`; those are reference material, not the active implementation.
 
-## Первый запуск — по шагам
+## License
 
-При самом первом запуске программа задаст четыре вопроса:
-
-### 1️⃣ Язык
-
-Выберите: **Русский** или **English**. От этого зависит весь текст в программе.
-
-### 2️⃣ Расположение настроек
-
-- **🏠 Домашняя папка** — стандартное место. **Рекомендуется.**
-- **📂 Выбрать свою папку** — любая папка (удобно для флешки)
-
-### 3️⃣ Тема
-
-Светлая, тёмная или цветная. Можно сменить позже.
-
-### 4️⃣ Платформа
-
-Выберите сайт для скачивания. У каждой платформы свои настройки. Сменить можно в любой момент кнопкой **«🔄 Сменить платформу»**.
-
-После этого — скачивайте!
-
----
-
-## Как пользоваться
-
-### Скачать видео
-
-1. Убедитесь, что выбран режим **📺 Видео** (по умолчанию)
-2. **Вставьте ссылку** на видео в поле URL (`Ctrl+V`)
-3. Выберите папку — нажмите **📂**
-4. Выберите качество: 8K, 4K, 2K, 1080p, 720p, 480p, 360p или «лучшее»
-5. Нажмите **▶ Старт**
-6. Видео сохранится в подпапке с именем платформы (например, `YouTube/`)
-
-### Скачать только аудио
-
-1. Переключитесь в **🎵 Аудио**
-2. Выберите источник: Из видео / Из плейлиста / Из канала
-3. Формат: MP3, FLAC, WAV, M4A, OGG или OPUS
-4. Качество: 128k, 192k, 256k, 320k или «Максимум»
-5. Вставьте ссылку и **▶ Старт**
-
-### Скачать весь канал или плейлист
-
-1. Режим **📁 Канал** или **📋 Плейлист**
-2. Вставьте ссылку
-3. Выберите качество
-4. Полезные опции:
-   - **📜 archive.txt** — при повторном запуске скачаются только **новые** видео
-   - **📊 От старых к новым** — хронологический порядок
-   - **🔢 Без нумерации** — убирает `00001_` из имён
-   - **🔄 Перезапускать** — помогает при нестабильном интернете
-
-### SponsorBlock (только YouTube)
-
-1. Поставьте **☑ SponsorBlock**
-2. Действие: **Отметить** (главы) или **Удалить** (вырезать)
-3. Категории: спонсоры, интро, аутро, самореклама и т.д.
-
----
-
-## Описание опций
-
-| Опция | Что делает |
-|-------|-----------|
-| 🔔 Уведомление | Уведомление Windows по завершении (только если окно не активно) |
-| 📜 archive.txt | Запоминает скачанные видео |
-| 📊 От старых к новым | Хронологический порядок |
-| 🔢 Без нумерации | Убирает `00001_` из имён |
-| 🔄 Перезапуск | Перезапускает yt-dlp после каждого видео |
-| 📝 Субтитры | Скачивает субтитры |
-| 🚀 aria2c | Ускоритель загрузки (должен быть в PATH — см. Шаг 5) |
-| ⚡ Параллельно | 2–5 видео одновременно |
-| 🔒 Авторизация | Куки браузера для приватного контента |
-| 🌐 Прокси | Скачивание через прокси |
-
----
-
-## Пресеты
-
-- **💾 Сохранить пресет** — сохраняет текущие настройки
-- **📂 Загрузить пресет** — восстанавливает сохранённые
-
----
-
-## Смена платформы
-
-Нажмите **🔄 Сменить платформу** в «Настройках приложения». Настройки сохранятся автоматически. У каждой платформы независимые настройки.
-
----
-
-## Иконка в трее
-
-Рядом с часами:
-
-- **Левый клик** → показать окно
-- **Правый клик** → Сбросить настройки / Закрыть
-
----
-
-## Обновление зависимостей
-
-Если скачивание перестало работать — обновите yt-dlp:
-
-1. Зайдите на [github.com/yt-dlp/yt-dlp/releases/latest](https://github.com/yt-dlp/yt-dlp/releases/latest)
-2. Скачайте новый `yt-dlp.exe`
-3. Замените старый файл в `C:\aura_dependencies\`
-
-Или нажмите **«🔄 yt-dlp → master»** в программе.
-
-ffmpeg и aria2c обновлять почти никогда не нужно.
-
----
-
-## Решение проблем
-
-| Проблема | Решение |
-|----------|---------|
-| `yt-dlp не является командой` | Не в PATH — повторите [Шаг 7](#шаг-7-добавьте-папку-в-path) |
-| `ffmpeg не является командой` | Не в PATH — убедитесь, что `ffmpeg.exe` в `C:\aura_dependencies\` |
-| Видео без звука | ffmpeg не найден |
-| «n challenge solving failed» | Node.js не установлен — выполните [Шаг 6](#шаг-6-установите-nodejs-обязательно-для-youtube) |
-| «HTTP Error 403» | Авторизация → Куки браузера → выберите браузер |
-| «Приватное видео» | Тоже нужны куки |
-| Медленная загрузка | Установите aria2c ([Шаг 5](#шаг-5-установите-aria2c-необязательно-но-рекомендуется)) и включите галочку 🚀 aria2c |
-| Скачивание перестало работать | Обновите yt-dlp — см. [Обновление](#обновление-зависимостей) |
-| Программа не запускается | Антивирус блокирует `.exe` |
-
----
-
-<p align="center">
-  <b>✦ AURA VIDEO DOWNLOADER ✦</b><br>
-  Сделано с ❤️ — бесплатно и навсегда
-</p>
+MIT. See [`LICENSE`](./LICENSE).
