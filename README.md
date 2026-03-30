@@ -5,15 +5,6 @@
   Powered by yt-dlp + ffmpeg
 </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/platform-Windows-blue?logo=windows&logoColor=white" alt="Windows">
-  <img src="https://img.shields.io/badge/license-free-green" alt="Free">
-  <img src="https://img.shields.io/badge/no_install-portable-orange" alt="Portable">
-</p>
-
----
-
-
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D6)
 ![License](https://img.shields.io/badge/license-MIT-green)
