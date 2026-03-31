@@ -11,6 +11,8 @@
 ![Tests](https://img.shields.io/badge/tests-137%20collected-brightgreen)
 ![Platforms](https://img.shields.io/badge/platforms-23-orange)
 
+If yow want to add your language into the program, you can do it here: https://github.com/communism420/Aura-Translations
+
 Aura Video Downloader 2.0 is a Windows-first desktop GUI built with Python, PySide6, yt-dlp, and ffmpeg. It wraps a powerful command-line stack in a structured multi-workspace interface with per-platform settings, inspection tools, queue/history management, subscription automation, crash recovery, and optional in-app browser/media-player features.
 
 This repository is the modular 2.0 generation of Aura. The legacy single-file implementation is still present as [`old version.py`](./old%20version.py) for historical comparison, but the active application now lives in the `aura/` package.
